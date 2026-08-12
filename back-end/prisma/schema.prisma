@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+enum InteractionType {
+  EMAIL
+  CALL
+  MEETING
+  EVENT
+  IN_PERSON
+  OTHER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// Tenant = the school/team using the CRM (User.organizationId in spec)
+model Tenant {
+  id            String         @id @default(cuid())
+  name          String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  users         User[]
+  organizations Organization[]
+  contacts      Contact[]
+  tasks         Task[]
+  interactions  Interaction[]
+}
+
+model User {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  passwordHash String
+  role         UserRole      @default(MEMBER)
+  tenantId     String
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+  interactions Interaction[]
+  assignedTasks Task[]       @relation("AssignedTasks")
+  createdTasks  Task[]       @relation("CreatedTasks")
+}
+
+// External company/school/nonprofit the CRM interacts with
+model Organization {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+  name        String
+  website     String?
+  industry    String?
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  contacts    Contact[]
+
+  @@index([tenantId])
+}
+
+model Contact {
+  id             String        @id @default(cuid())
+  tenantId       String
+  tenant         Tenant        @relation(fields: [tenantId], references: [id])
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  jobTitle       String?
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+  interactions   Interaction[]
+  tasks          Task[]
+
+  @@index([tenantId])
+  @@index([organizationId])
+}
+
+model Interaction {
+  id          String          @id @default(cuid())
+  tenantId    String
+  tenant      Tenant          @relation(fields: [tenantId], references: [id])
+  contactId   String
+  contact     Contact         @relation(fields: [contactId], references: [id])
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  type        InteractionType
+  date        DateTime
+  subject     String?
+  description String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
+
+  @@index([tenantId])
+  @@index([contactId])
+}
+
+model Task {
+  id              String       @id @default(cuid())
+  tenantId        String
+  tenant          Tenant       @relation(fields: [tenantId], references: [id])
+  title           String
+  description     String?
+  status          TaskStatus   @default(TODO)
+  priority        TaskPriority @default(MEDIUM)
+  dueDate         DateTime?
+  contactId       String?
+  contact         Contact?     @relation(fields: [contactId], references: [id])
+  assignedUserId  String?
+  assignedUser    User?        @relation("AssignedTasks", fields: [assignedUserId], references: [id])
+  createdByUserId String
+  createdByUser   User         @relation("CreatedTasks", fields: [createdByUserId], references: [id])
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  deletedAt       DateTime?
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([assignedUserId])
+}
